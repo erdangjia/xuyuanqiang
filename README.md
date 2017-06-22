@@ -2,40 +2,115 @@
 
 
 ### 简介二当家的素材网整理提供
-
-2017最新支付宝源码演示下载
-
-PHP5.5及以上
-
-※业务处理注意事项※
-
-请配置notify_url文件、return_url文件，其中，notify_url文件主要是写入业务处理逻辑代码，请结合自身情况谨慎编写。
-
-如何验证异步通知数据？
-
-1、商户需要验证该通知数据中的out_trade_no是否为商户系统中创建的订单号
-
-2、判断total_amount是否确实为该订单的实际金额（即商户订单创建时的金额）
-
-3、校验通知中的seller_id（或者seller_email) 是否为该笔交易对应的操作方（一个商户可能有多个seller_id/seller_email）
-
-4、验证接口调用方的app_id
-
-
-※Demo使用手册※
-代码简要说明
-pagepay
-	buildermodel ---------- 对应的接口的bizcontent业务参数进行封装处理，且做了json转换，比字符串传参更佳方便。
-	service->AlipayTradeService.php      ---------- 所有接口中使用的方法。
-
-
-AlipayTradeService.php 文件内方法说明
-
-1、SDK请求方法
-aopclientRequestExecute($request,$ispage=false)
-$request：对应接口请求的对象
-$ispage：是否为页面跳转请求（手机网站支付和电脑网站支付必须为页面跳转，查询，退款则可以无需页面跳转）
-
+教程如下：
+HTML
+首先我们遍历出所有的许愿列表：
+$query = mysql_query("select * from wishing_wall order by id desc limit 0, 50"); 
+while ($row = mysql_fetch_array($query)) { 
+    list($left, $top, $zindex) = explode('|', $row['xyz']); 
+    $time = strtotime($row['addtime']); 
+ 
+    $notes .= "<dl class='paper a" . $row['color'] . "'  style='left:" . $left . "px;top:" . $top . "px;z-index:" . $zindex . "' data-id=" . $row['id'] . "> 
+<dt><span class='username'>" . $row['name'] . "</span><span class='num'>" . $row['id'] . "</span></dt> 
+<dd class='content'>" . $row['content'] . "</dd> 
+<dd class='bottom'><span class='time'>" . tranTime($time) . "</span><a class='close' href='javascript:void(0);'></a></dd> 
+</dl>";
+接着我们把许愿列表放到.container里面：
+<div class="container"style="position: relative"> 
+  <?php echo $notes; ?> 
+</div>
+jQuery
+通过jQueryUI拖动许愿墙悬浮层代码如下：
+var zIndex = 0; 
+function make_draggable(elements) { 
+    elements.draggable({ 
+        handle: 'dt', //拖动把手 
+        opacity: 0.8, 
+        containment: 'parent', //拖动范围  
+        start: function(e, ui) { 
+            ui.helper.css('z-index', ++zIndex) 
+        }, 
+        stop: function(e, ui) { 
+            $.get('ajax.php?act=update_position', { 
+                x: ui.position.left, 
+                y: ui.position.top, 
+                z: zIndex, 
+                id: parseInt(ui.helper.attr("data-id")) 
+            }); 
+        } 
+    }); 
+}
+PHP
+保存位置：
+$act = htmlspecialchars($_GET['act']); 
+if ($act == 'update_position') { 
+    if (!is_numeric($_GET['id']) || !is_numeric($_GET['x']) || !is_numeric($_GET['y']) || !is_numeric($_GET['z'])) 
+        die("0"); 
+ 
+    $id = intval($_GET['id']); 
+    $x = intval($_GET['x']); 
+    $y = intval($_GET['y']); 
+    $z = intval($_GET['z']); 
+ 
+    mysql_query("UPDATE wishing_wall SET xyz='" . $x . "|" . $y . "|" . $z . "' WHERE id=" . $id); 
+ 
+    echo "1"; 
+}
+我们再看下添加许愿代码：
+<div class="add"> 
+      <a href="add_note.html" id="fancy" class="add_note"></a> 
+</div>
+通过fancybox插件弹出add_note.html，add_note.html表单代码如下：
+<div id='send-form'> 
+    <p class='title'><span>许下你的愿望</span><a  id='box_close'></a></p> 
+    <form action="" name='wish'> 
+        <div class="per"> 
+            <label for="username">昵称：</label> 
+            <input type="text" name='username' id='username'/> 
+        </div> 
+        <div class="per"> 
+            <label for="content">愿望：(您还可以输入 <span id='font-num'>50</span> 个字)</label> 
+            <textarea name="content" id='content'>
+添加许愿jQuery代码：
+$("#addbtn").live('click', function(e) { 
+        var txt = $("#content").val(); 
+        var username = $("#username").val(); 
+        if (txt == "") { 
+            $("#content").focus(); 
+            return false; 
+        } 
+        if (username == "") { 
+            $("#msg").html("请输入您的姓名！"); 
+            $("#user").focus(); 
+            return false; 
+        } 
+        var left = 0; 
+        var top = 0; 
+        var color_id = $("#color").children("li.current").attr("data-color-id"); 
+        var data = { 
+            'zIndex': ++zIndex, 
+            'content': txt, 
+            'user': username, 
+            'left': left, 
+            'top': top, 
+            "color_id": color_id 
+        }; 
+        $.post('ajax.php?act=add', data, function(msg) { 
+            zIndex = zIndex++; 
+            if (parseInt(msg)) { 
+                var str = "<dl class='paper a" + color_id + " ui-draggable' data-id='" + msg + "' style='left:" + left + "px;top:" + top + "px;z-index:" + zIndex + "'>\n\ 
+<dt><span class='username'>" + username + "</span><span class='num'>6</span></dt>\n\ 
+<dd class='content'>" + txt + "</dd><dd class='bottom'><span class='time'>刚刚</span>\n\ 
+<a class='close' href='javascript:void(0);'></a></dd></dl>"; 
+                $(".container").append(str); 
+                make_draggable($('dl')); 
+                $.fancybox.close(); 
+            } else { 
+                alert(msg); 
+            } 
+        }); 
+        e.preventDefault(); 
+    });
 
 
 ### 官网
